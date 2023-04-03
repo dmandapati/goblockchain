@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -30,6 +32,27 @@ func (b *Block) Print() {
 	fmt.Printf("nonce           %d\n", b.nonce)
 	fmt.Printf("previous_hash   %s\n", b.previousHash)
 	fmt.Printf("transactions    %s\n", b.transactions)
+}
+
+// function to create hash
+func (b *Block) Hash() [32]byte {
+	m, _ := json.Marshal(b)
+	return sha256.Sum256([]byte(m))
+}
+
+// function to marcel the json format
+func (b *Block) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Timestamp int64  'json:"timestamp"'
+		Nonce        int  'json:"nonce"'
+		PreviousHash string  'json:"previous_hash"'
+		Transactions []string 'json:"transactions"'
+	}{
+		Timestamp:    b.timestamp,
+		Nonce:        b.nonce,
+		PreviousHash: b.previousHash,
+		Transactions: b.transactions,
+	})
 }
 
 // Blockchain Struct
