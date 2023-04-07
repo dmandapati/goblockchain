@@ -9,8 +9,12 @@ import (
 	"time"
 )
 
-// set the difficulty level for mining
-const MINING_DIFFICULTY = 3
+// set the difficulty level, minier sender address and rewards amount for mining
+const (
+	MINING_DIFFICULTY = 3
+	MINING_SENDER     = "THE BLOCKCHAIN"
+	MINING_REWARD     = 1.0
+)
 
 // Block Struct
 type Block struct {
@@ -63,14 +67,16 @@ func (b *Block) MarshalJSON() ([]byte, error) {
 
 // Blockchain Struct
 type BlockChain struct {
-	transactionpool []*Transaction
-	chain           []*Block
+	transactionpool   []*Transaction
+	chain             []*Block
+	blockchainAddress string
 }
 
 // function to create Blockchain
-func NewBlockchain() *BlockChain {
+func NewBlockchain(blockchainAddress string) *BlockChain {
 	b := &Block{}
 	bc := new(BlockChain)
+	bc.blockchainAddress = blockchainAddress
 	bc.CreateBlock(0, b.Hash())
 	return bc
 }
@@ -80,6 +86,7 @@ func (bc *BlockChain) CreateBlock(nonce int, previousHash [32]byte) *Block {
 	b := NewBlock(nonce, previousHash, bc.transactionpool)
 	bc.chain = append(bc.chain, b)
 	bc.transactionpool = []*Transaction{}
+	log.Println("action=New Block, status=success")
 	return b
 }
 
@@ -105,7 +112,7 @@ type Transaction struct {
 }
 
 // This function will add the transaction to transaction pool
-func (bc *BlockChain) addTransaction(sender string, recipient string, value float32) {
+func (bc *BlockChain) AddTransaction(sender string, recipient string, value float32) {
 	t := NewTransaction(sender, recipient, value)
 	bc.transactionpool = append(bc.transactionpool, t)
 }
@@ -128,6 +135,7 @@ func (bc *BlockChain) ValidProof(nonce int, previousHash [32]byte, transactions 
 	guessBlock := Block{timestamp: 0, nonce: nonce, previousHash: previousHash, transactions: transactions}
 	guessHashStr := fmt.Sprintf("%x", guessBlock.Hash())
 	fmt.Println(guessHashStr)
+	log.Println("action=difficulty check, status=success")
 	return guessHashStr[:difficulty] == zeros
 }
 
@@ -139,11 +147,40 @@ func (bc *BlockChain) ProofOfWork() int {
 	for !bc.ValidProof(nonce, previousHash, transactions, MINING_DIFFICULTY) {
 		nonce += 1
 	}
+	log.Println("action=nonce, status=success")
 	return nonce
+}
+
+// function for mining
+func (bc *BlockChain) Mining() bool {
+	bc.AddTransaction(MINING_SENDER, bc.blockchainAddress, MINING_REWARD)
+	nonce := bc.ProofOfWork()
+	previousHash := bc.LastBlock().Hash()
+	bc.CreateBlock(nonce, previousHash)
+	log.Println("action=mining, status=success")
+	return true
+}
+
+// funcation to get the total balance of address
+func (bc *BlockChain) CalculateTotalAmount(blockchainAddress string) float32 {
+	var totalAmount float32 = 0.0
+	for _, b := range bc.chain {
+		for _, t := range b.transactions {
+			value := t.value
+			if blockchainAddress == t.recipientBlockchainAddress {
+				totalAmount += value
+			}
+			if blockchainAddress == t.senderBlockchainAddress {
+				totalAmount -= value
+			}
+		}
+	}
+	return totalAmount
 }
 
 // create function for creating transactions
 func NewTransaction(sender string, recipient string, value float32) *Transaction {
+	log.Println("action=transaction, status=success")
 	return &Transaction{sender, recipient, value}
 }
 
@@ -173,21 +210,20 @@ func init() {
 }
 
 func main() {
-	blockChain := NewBlockchain()
+	myBlockCHainAddress := "myBlockCHainAddress"
+	blockChain := NewBlockchain(myBlockCHainAddress)
 	blockChain.print()
 
-	blockChain.addTransaction("A", "B", 1.0)
-
-	previousHash := blockChain.LastBlock().Hash()
-	nonce := blockChain.ProofOfWork()
-	blockChain.CreateBlock(nonce, previousHash)
+	blockChain.AddTransaction("A", "B", 1.0)
+	blockChain.Mining()
 	blockChain.print()
 
-	blockChain.addTransaction("C", "D", 2.0)
-	blockChain.addTransaction("X", "Y", 3.0)
-
-	previousHash = blockChain.LastBlock().Hash()
-	nonce = blockChain.ProofOfWork()
-	blockChain.CreateBlock(nonce, previousHash)
+	blockChain.AddTransaction("C", "D", 2.0)
+	blockChain.AddTransaction("X", "Y", 3.0)
+	blockChain.Mining()
 	blockChain.print()
+
+	fmt.Printf("MyMinner %1f\n", blockChain.CalculateTotalAmount("myBlockCHainAddress"))
+	fmt.Printf("C %1f\n", blockChain.CalculateTotalAmount("C"))
+	fmt.Printf("D %1f\n", blockChain.CalculateTotalAmount("D"))
 }
