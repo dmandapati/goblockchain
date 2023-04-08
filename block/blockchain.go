@@ -1,9 +1,11 @@
 package block
 
 import (
+	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"goblockchain/utils"
 	"log"
 	"strings"
 	"time"
@@ -96,7 +98,7 @@ func (bc *BlockChain) LastBlock() *Block {
 }
 
 // function to print BlockChain
-func (bc *BlockChain) print() {
+func (bc *BlockChain) Print() {
 	for i, block := range bc.chain {
 		fmt.Printf("%s chain %d %s\n", strings.Repeat("=", 25), i, strings.Repeat("=", 25))
 		block.Print()
@@ -112,9 +114,32 @@ type Transaction struct {
 }
 
 // This function will add the transaction to transaction pool
-func (bc *BlockChain) AddTransaction(sender string, recipient string, value float32) {
+func (bc *BlockChain) AddTransaction(sender string, recipient string, value float32, senderPublicKey *ecdsa.PublicKey, s *utils.Signature) bool {
+
 	t := NewTransaction(sender, recipient, value)
-	bc.transactionpool = append(bc.transactionpool, t)
+
+	if sender == MINING_SENDER {
+		bc.transactionpool = append(bc.transactionpool, t)
+		return true
+	}
+	if bc.VerifyTransactionSignature(senderPublicKey, s, t) {
+		// if bc.CalculateTotalAmount(sender) < value {
+		// 	log.Println("ERROR: Not enough balanace in a wallet")
+		// 	return false
+		// }
+		bc.transactionpool = append(bc.transactionpool, t)
+		return true
+	} else {
+		log.Println("ERROR: Verify Transaction")
+	}
+	return false
+}
+
+// function to verify the transaction
+func (bc *BlockChain) VerifyTransactionSignature(senderPublicKey *ecdsa.PublicKey, s *utils.Signature, t *Transaction) bool {
+	m, _ := json.Marshal(t)
+	h := sha256.Sum256([]byte(m))
+	return ecdsa.Verify(senderPublicKey, h[:], s.R, s.S)
 }
 
 // Function to copy transactions from transactions pool
@@ -134,8 +159,8 @@ func (bc *BlockChain) ValidProof(nonce int, previousHash [32]byte, transactions 
 	zeros := strings.Repeat("0", difficulty)
 	guessBlock := Block{timestamp: 0, nonce: nonce, previousHash: previousHash, transactions: transactions}
 	guessHashStr := fmt.Sprintf("%x", guessBlock.Hash())
-	fmt.Println(guessHashStr)
-	log.Println("action=difficulty check, status=success")
+	//	log.Println(guessHashStr)
+	//	log.Println("Task: mining, action=difficulty check, status=success")
 	return guessHashStr[:difficulty] == zeros
 }
 
@@ -153,7 +178,7 @@ func (bc *BlockChain) ProofOfWork() int {
 
 // function for mining
 func (bc *BlockChain) Mining() bool {
-	bc.AddTransaction(MINING_SENDER, bc.blockchainAddress, MINING_REWARD)
+	bc.AddTransaction(MINING_SENDER, bc.blockchainAddress, MINING_REWARD, nil, nil)
 	nonce := bc.ProofOfWork()
 	previousHash := bc.LastBlock().Hash()
 	bc.CreateBlock(nonce, previousHash)
